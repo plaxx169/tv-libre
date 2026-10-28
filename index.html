@@ -62,10 +62,20 @@ function parse(t){const out=[],seen=new Set();let m=null;for(const l of t.split(
  if(l.startsWith("#EXTINF")){const c=((l.match(/group-title="([^"]*)"/)||[])[1]||"").split(";")[0].trim();
   m={name:(l.split(",").pop()||"").trim(),logo:(l.match(/tvg-logo="([^"]*)"/)||[])[1]||"",cat:T[c]||c||"Otros"}}
  else if(m&&l&&!l.startsWith("#")){m.url=l.trim();if(!seen.has(m.url)){seen.add(m.url);out.push(m)}m=null}}return out}
-function chips(){const box=$("#chips");box.innerHTML="";const n={};chans.forEach(c=>n[c.cat]=(n[c.cat]||0)+1);
- const cats=Object.keys(n).filter(k=>n[k]>=8&&k!=="Otros").sort((a,b)=>n[b]-n[a]).slice(0,8);
- [["fav","★ Favoritos"],["all","Todos"],...cats.map(k=>[k,k])].forEach(([k,t])=>{
-  const b=btn(k===view?"on":"",t,()=>{view=k;limit=150;chips();render();first()});box.appendChild(b)})}
+function allCats(){const n={};chans.forEach(c=>n[c.cat]=(n[c.cat]||0)+1);return Object.keys(n).sort((x,y)=>n[y]-n[x]).map(k=>[k,n[k]])}
+function pinned(){const p=get("tvl_pins",null);return p||allCats().filter(([k,c])=>c>=8&&k!=="Otros").slice(0,5).map(x=>x[0])}
+function pick(k){view=k;limit=150;chips();render();first()}
+function chips(){const box=$("#chips");box.innerHTML="";const L=[["fav","★ Favoritos"],["all","Todos"],...pinned().map(k=>[k,k])];
+ if(view!=="cats"&&!L.some(x=>x[0]===view))L.push([view,view]);
+ L.forEach(([k,t])=>box.appendChild(btn(k===view?"on":"",t,()=>pick(k))));
+ box.appendChild(btn(view==="cats"?"on":"","Categorías",()=>pick("cats")))}
+function renderCats(fk){shown=[];list.innerHTML="";const pins=pinned();
+ allCats().forEach(([k,c])=>{const r=document.createElement("div");r.className="row";r.dataset.k=k;
+  r.appendChild(btn("ch",k+" ("+c+")",()=>pick(k)));
+  r.appendChild(btn("act star",pins.includes(k)?"Fijada ✓":"Fijar",()=>{const p=pinned(),i=p.indexOf(k);if(i>=0)p.splice(i,1);else p.push(k);put("tvl_pins",p);chips();render({k:k,c:"star"})}));
+  list.appendChild(r)});
+ if(!list.children.length)list.innerHTML='<div id="empty">Cargando categorías…</div>';
+ if(fk){const r=[...list.children].find(x=>x.dataset&&x.dataset.k===fk.k),b=r&&r.querySelector("."+fk.c);if(b)b.focus()}}
 const isF=c=>fav.some(f=>f.url===c.url);
 function toggle(c){const i=fav.findIndex(f=>f.url===c.url);if(i>=0)fav.splice(i,1);else fav.push({name:c.name,logo:c.logo,cat:c.cat,url:c.url});put("tvl_fav",fav)}
 function visible(){const a=view==="fav"?fav:chans.filter(c=>(view==="all"||c.cat===view)&&!bad[c.url]);return q?a.filter(c=>c.name.toLowerCase().includes(q)):a}
@@ -73,7 +83,7 @@ function chBtn(c){const b=btn("ch","",()=>{cur&&cur.url===c.url?full(true):play(
  const im=new Image();im.loading="lazy";im.onerror=()=>{im.style.visibility="hidden"};if(c.logo)im.src=c.logo;else im.style.visibility="hidden";
  const sp=document.createElement("span");sp.textContent=c.name;const g=document.createElement("small");g.textContent=c.cat||"";sp.appendChild(g);b.append(im,sp);return b}
 function mv(i,d){const j=i+d;if(j<0||j>=fav.length)return;[fav[i],fav[j]]=[fav[j],fav[i]];put("tvl_fav",fav);render({k:fav[j].url,c:d<0?"up":"dn"})}
-function render(fk){shown=visible();list.innerHTML="";
+function render(fk){if(view==="cats")return renderCats(fk);shown=visible();list.innerHTML="";
  if(!shown.length){list.innerHTML='<div id="empty">'+(view==="fav"?"Todavía no tenés favoritos. Entrá a “Todos” y elegí ☆ en los canales que quieras.":chans.length?"Sin canales.":"Cargando canales…")+"</div>";return}
  shown.slice(0,limit).forEach((c,i)=>{const r=document.createElement("div");r.className="row";r.dataset.k=c.url;r.appendChild(chBtn(c));
   if(view==="fav"){r.appendChild(btn("act up","↑",()=>mv(i,-1)));r.appendChild(btn("act dn","↓",()=>mv(i,1)));
