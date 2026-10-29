@@ -50,11 +50,19 @@ body.v-pluto .ch{grid-column:1/-1;flex-direction:column;text-align:center;gap:6p
 body.v-pluto .ch img{width:100%;height:70px}
 body.v-pluto .star{grid-column:1/-1}
 body.v-pluto .act{padding:6px 0}
+#ctl{position:absolute;top:14px;right:14px;display:none;gap:8px;align-items:center;z-index:12;background:rgba(0,0,0,.65);padding:8px;border-radius:12px}
+body.full #ctl.on{display:flex}
+#cn{max-width:30vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 8px;color:#fff}
+#pick{position:absolute;top:0;right:0;bottom:0;width:min(420px,42%);display:none;flex-direction:column;background:rgba(10,12,18,.93);z-index:13}
+body.pk-open #pick{display:flex}
+#pickt{padding:14px 16px;color:var(--mute);font-size:.85em;border-bottom:1px solid var(--line)}
+#pickl{overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+.pk{text-align:left;overflow:hidden;text-overflow:ellipsis}.pk.cur{border-color:var(--mute)}
 </style></head><body>
 <div id="app">
 <header id="bar"><h1>TV Libre</h1><span id="chips"></span></header>
 <div id="list"></div>
-<div id="stage"><video id="v" autoplay playsinline></video><div id="now"></div><div id="msg">Cargando…</div></div>
+<div id="stage"><video id="v" autoplay playsinline></video><div id="now"></div><div id="ctl"><span id="cn"></span><button id="cx">✕ Salir</button><button id="cl">☰ Canales</button><button id="cf">☆ Favorito</button></div><div id="pick"><div id="pickt"></div><div id="pickl"></div></div><div id="msg">Cargando…</div></div>
 </div>
 <script>
 const BASE="https://iptv-org.github.io/iptv/languages/spa.m3u";
@@ -110,7 +118,7 @@ function render(fk){if(view==="cats")return renderCats(fk);shown=visible();list.
  if(shown.length>limit){const r=document.createElement("div");r.className="row";r.appendChild(btn("ch more","Mostrar más ("+(shown.length-limit)+")",()=>{limit+=150;render()}));list.appendChild(r)}
  if(fk){const r=[...list.children].find(x=>x.dataset.k===fk.k),b=r&&r.querySelector("."+fk.c);if(b)b.focus()}}
 function first(){const b=list.querySelector(".ch")||bar.querySelector("button.on");if(b)b.focus()}
-function play(c){cur=c;put("tvl_last",c);$("#now").textContent=c.name+(c.cat?" · "+c.cat:"");clearTimeout(timer);msg.style.display="block";msg.textContent="Cargando "+c.name+"…";
+function play(c){cur=c;put("tvl_last",c);$("#cn").textContent=c.name;cfLabel();$("#now").textContent=c.name+(c.cat?" · "+c.cat:"");clearTimeout(timer);msg.style.display="block";msg.textContent="Cargando "+c.name+"…";
  if(hls){hls.destroy();hls=null}
  if(window.Hls&&Hls.isSupported()&&/m3u8/i.test(c.url)){
   hls=new Hls({startLevel:0,capLevelToPlayerSize:true,maxBufferLength:12,manifestLoadingTimeOut:8000,manifestLoadingMaxRetry:1,levelLoadingMaxRetry:1,fragLoadingMaxRetry:2});
@@ -124,14 +132,36 @@ function fail(){clearTimeout(timer);const c=cur;if(!c)return;if(view!=="fav"){ba
  msg.style.display="block";msg.textContent=c.name+" no responde. Pasando al siguiente…";
  if(tries++<5)setTimeout(()=>{if(cur===c)step(1)},1200)}
 function step(d){if(!shown.length)return;const k=shown.findIndex(x=>cur&&x.url===cur.url);play(shown[(k+d+shown.length)%shown.length])}
-function full(on){document.body.classList.toggle("full",on);if(!on&&cur){const r=[...list.children].find(x=>x.dataset.k===cur.url);if(r)r.querySelector(".ch").focus()}}
-window.handleBack=()=>{if(document.body.classList.contains("full")){full(false);return true}return false};
+function full(on){document.body.classList.toggle("full",on);if(on)showCtl();else{hideCtl();closePick();render()}if(!on&&cur){const r=[...list.children].find(x=>x.dataset.k===cur.url);if(r)r.querySelector(".ch").focus()}}
+let ctlT=null;const B=()=>document.body.classList;
+function cfLabel(){$("#cf").textContent=(cur&&isF(cur)?"★":"☆")+" Favorito"}
+function showCtl(f){const c=$("#ctl");c.classList.add("on");cfLabel();clearTimeout(ctlT);ctlT=setTimeout(hideCtl,5000);if(f)$("#cx").focus()}
+function hideCtl(){const c=$("#ctl");c.classList.remove("on");if(c.contains(document.activeElement))document.activeElement.blur()}
+const VN=()=>view==="fav"?"★ Favoritos":view==="all"?"Todos":view;
+function buildPick(){const p=$("#pickl");p.innerHTML="";$("#pickt").textContent=VN()+"   ◀ ▶ cambiar lista";
+ shown.slice(0,200).forEach(c=>p.appendChild(btn("pk"+(cur&&cur.url===c.url?" cur":""),c.name,()=>{play(c);closePick()})))}
+function openPick(){shown=visible();buildPick();hideCtl();B().add("pk-open");const b=$("#pickl .pk.cur")||$("#pickl .pk");if(b)b.focus()}
+function closePick(){B().remove("pk-open");const p=$("#pick");if(p.contains(document.activeElement))document.activeElement.blur()}
+function cycle(d){if(view==="cats")view="all";const L=["fav","all",...pinned()];let k=L.indexOf(view);if(k<0)k=1;view=L[(k+d+L.length)%L.length];limit=150;chips();shown=visible();buildPick();const b=$("#pickl .pk.cur")||$("#pickl .pk");if(b)b.focus()}
+$("#cx").onclick=()=>full(false);$("#cl").onclick=openPick;$("#cf").onclick=()=>{if(cur){toggle(cur);cfLabel()}};
+$("#stage").addEventListener("mousemove",()=>{if(B().contains("full"))showCtl()});$("#stage").addEventListener("click",()=>{if(B().contains("full"))showCtl()});
+window.handleBack=()=>{if(B().contains("pk-open")){closePick();return true}if(B().contains("full")){full(false);return true}return false};
 addEventListener("keydown",e=>{v.muted=false;const a=document.activeElement,K=e.key;
  if(K==="PageUp"||K==="ChannelUp"){step(-1);e.preventDefault();return}
  if(K==="PageDown"||K==="ChannelDown"){step(1);e.preventDefault();return}
  if(K==="MediaPlayPause"){v.paused?v.play():v.pause();e.preventDefault();return}
  if(K==="Escape"||(K==="Backspace"&&a.tagName!=="INPUT")){if(handleBack())e.preventDefault();return}
- if(document.body.classList.contains("full")){if(K==="ArrowUp"){step(-1);e.preventDefault()}else if(K==="ArrowDown"){step(1);e.preventDefault()}else if(K==="Enter"&&cur){msg.style.display="block";msg.textContent=cur.name;setTimeout(()=>{if(!v.paused)msg.style.display="none"},3000)}return}
+ if(B().contains("full")){
+  if(B().contains("pk-open")){
+   if(K==="ArrowUp"||K==="ArrowDown"){const x=[...document.querySelectorAll("#pickl .pk")],k=x.indexOf(a)+(K==="ArrowDown"?1:-1);if(x[k])x[k].focus();e.preventDefault()}
+   else if(K==="ArrowLeft"||K==="ArrowRight"){cycle(K==="ArrowRight"?1:-1);e.preventDefault()}
+   return}
+  const c=$("#ctl"),inC=c.contains(a),x=[...c.querySelectorAll("button")];
+  if(K==="ArrowUp"){step(-1);showCtl();e.preventDefault()}
+  else if(K==="ArrowDown"){step(1);showCtl();e.preventDefault()}
+  else if(K==="ArrowLeft"||K==="ArrowRight"){if(!inC)showCtl(true);else{const k=x.indexOf(a)+(K==="ArrowRight"?1:-1);if(x[k])x[k].focus();showCtl()}e.preventDefault()}
+  else if(K==="Enter"){if(!inC){showCtl(true);e.preventDefault()}else showCtl()}
+  return}
  if(!/^Arrow/.test(K))return;
  if(bar.contains(a)){if(a.tagName==="INPUT"&&(K==="ArrowLeft"||K==="ArrowRight"))return;
   if(K==="ArrowUp"&&lay==="pluto"){if(cur)full(true);e.preventDefault();return}
